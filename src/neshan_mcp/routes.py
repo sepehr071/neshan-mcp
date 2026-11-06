@@ -143,50 +143,41 @@ def _zones(data: dict[str, Any]) -> list[dict[str, Any]]:
 
 @tool("Neshan directions")
 async def ns_route(
-    origin: Annotated[str, Field(description="Start point as 'lat,lng', e.g. '35.6997,51.3380' (Azadi Square).")],
-    destination: Annotated[str, Field(description="End point as 'lat,lng', e.g. '35.7448,51.3753' (Milad Tower).")],
+    origin: Annotated[str, Field(description="Start 'lat,lng', e.g. '35.6997,51.3380'.")],
+    destination: Annotated[str, Field(description="End 'lat,lng'.")],
     mode: Annotated[
         Literal["car", "motorcycle", "bicycle", "walk"],
-        Field(description="How to travel: car, motorcycle, bicycle or walk."),
+        Field(description="Travel mode."),
     ] = "car",
     stops: Annotated[
         list[str] | None,
         Field(
-            description="Places to pass on the way, in order, each 'lat,lng' (at most 3), e.g. ['35.7270,51.3793'].",
+            description="Waypoints in order, each 'lat,lng' (max 3).",
             max_length=3,
         ),
     ] = None,
     depart_at: Annotated[
         str | None,
         Field(
-            description="Car only: leave at this Tehran time instead of now, 'YYYY-MM-DD HH:MM' (Gregorian), e.g. '2026-11-01 08:00'. Gives the predicted travel time and arrive_at."
+            description="Car only: Tehran time 'YYYY-MM-DD HH:MM' (Gregorian) to leave at, e.g. '2026-11-01 08:00'. Gives arrive_at."
         ),
     ] = None,
     arrive_by: Annotated[
         str | None,
-        Field(
-            description="Car only: arrive by this Tehran time, 'YYYY-MM-DD HH:MM' (Gregorian), e.g. '2026-11-01 09:00'. Gives leave_by."
-        ),
+        Field(description="Car only: Tehran time 'YYYY-MM-DD HH:MM' (Gregorian) to arrive by. Gives leave_by."),
     ] = None,
-    avoid_traffic_zone: Annotated[
-        bool, Field(description="Car only: avoid Tehran's traffic-plan zone (طرح ترافیک).")
-    ] = False,
-    avoid_odd_even: Annotated[
-        bool, Field(description="Car only: avoid the odd-even / air-pollution plan zone (طرح زوج و فرد).")
-    ] = False,
+    avoid_traffic_zone: Annotated[bool, Field(description="Car only: avoid Tehran's traffic-plan zone.")] = False,
+    avoid_odd_even: Annotated[bool, Field(description="Car only: avoid the odd-even zone.")] = False,
     avoid_tolls: Annotated[bool, Field(description="Car only: avoid toll roads.")] = False,
-    steps: Annotated[bool, Field(description="Include turn-by-turn steps for the first route.")] = True,
+    steps: Annotated[bool, Field(description="Turn-by-turn steps for the first route.")] = True,
 ) -> dict[str, Any]:
     """Get car, motorcycle, bicycle or walking directions on Neshan: distance, travel time and turn-by-turn steps.
 
-    Use for "how long from A to B", "best route to ...", "how far is ...", "when should I leave to be there by 9".
-    Points are 'lat,lng'; get them from ns_search first. Car trips usually return 2-3 alternative routes, the first
-    being Neshan's pick; each has distance_km, duration_min (live estimate for leaving now, or for depart_at),
-    `via` (main roads), and flags toll_road, enters_traffic_zone, enters_odd_even_zone when true. depart_at and
-    arrive_by (car only, Neshan's traffic forecast; it covers Tehran, Karaj and Mashhad) cannot be combined with
-    stops or avoid_* options. Steps (Persian, first route only, up to 40) have `do`, `m` metres and `s` seconds.
-    `zones` lists the traffic plans for the area with their active hours. For several destinations at once use
-    ns_travel_times; for bus and metro use ns_transit_route.
+    Points are 'lat,lng' (geocode with ns_search). Car trips return 2-3 routes, the first being Neshan's pick:
+    distance_km, duration_min (live, or for depart_at), `via` and flags toll_road, enters_traffic_zone,
+    enters_odd_even_zone when true. depart_at / arrive_by (car; Tehran, Karaj, Mashhad forecast) cannot combine
+    with stops or avoid_*. Steps (first route, up to 40): `do` Persian text, `m` metres, `s` seconds. `zones` lists
+    traffic plans with hours. Many destinations: ns_travel_times; bus/metro: ns_transit_route.
     """
     o, d = _point(origin, "origin"), _point(destination, "destination")
     via = [_point(s, "stop") for s in stops or []]
@@ -231,27 +222,24 @@ async def ns_route(
 
 @tool("Neshan travel times to several places")
 async def ns_travel_times(
-    origin: Annotated[str, Field(description="Start point as 'lat,lng', e.g. '35.6997,51.3380'.")],
+    origin: Annotated[str, Field(description="Start 'lat,lng'.")],
     destinations: Annotated[
         list[str],
         Field(
-            description="1-10 end points, each 'lat,lng', e.g. ['35.7448,51.3753', '35.7270,51.3793'].",
+            description="1-10 end points, each 'lat,lng'.",
             min_length=1,
             max_length=10,
         ),
     ],
     mode: Annotated[
         Literal["car", "motorcycle", "bicycle", "walk"],
-        Field(description="How to travel: car, motorcycle, bicycle or walk."),
+        Field(description="Travel mode."),
     ] = "car",
 ) -> dict[str, Any]:
     """Get the travel time from one point to several places on Neshan, fastest first.
 
-    Use to answer "which of these is closest by car", "how far is each branch from me", or to pick the nearest
-    result of ns_search by real travel time instead of straight-line distance. Each result keeps the destination
-    as given ('lat,lng') with duration_min (Neshan's live estimate for leaving now, its first route) and
-    distance_km (car and motorcycle only). A destination with no route is listed under `failed`. For the full
-    route and steps to the winner call ns_route.
+    Ranks ns_search results by real travel time. Each result has `to` (as given), duration_min (live) and
+    distance_km (car and motorcycle only); unroutable destinations go under `failed`. Details: ns_route.
     """
     o = _point(origin, "origin")
     points = [(text, _point(text, "destination")) for text in destinations]
@@ -281,14 +269,12 @@ async def ns_travel_times(
 
 @tool("Tehran traffic and odd-even zone check")
 async def ns_zone_check(
-    location: Annotated[str, Field(description="The point as 'lat,lng', e.g. '35.6950,51.4200'.")],
+    location: Annotated[str, Field(description="Point 'lat,lng'.")],
 ) -> dict[str, Any]:
     """Check whether a point is inside Tehran's traffic-plan zone or odd-even (air-pollution) zone, with plan hours.
 
-    Use before driving to or parking at an address in Tehran: inside the traffic zone (طرح ترافیک) a car needs a
-    permit while the plan runs; inside the odd-even zone (طرح آلودگی هوا / زوج و فرد) plates are restricted on
-    alternate days. Answers from Neshan's router, which reports the zones of a trip's start point. `plans` gives the
-    active hours Neshan shows. To route around the zones use ns_route with avoid_traffic_zone / avoid_odd_even.
+    Use before driving to central Tehran: the traffic zone needs a permit while the plan runs, the odd-even zone
+    restricts plates on alternate days. `plans` gives active hours. To avoid them use ns_route avoid_*.
     """
     lat, lng = _point(location, "location")
     near = (round(lat + 0.003, 6), lng)  # a point ~300 m north: the router needs a trip to report zones
@@ -317,15 +303,13 @@ def _stop(p: Any) -> str | None:
 
 @tool("Neshan public transit directions")
 async def ns_transit_route(
-    origin: Annotated[str, Field(description="Start point as 'lat,lng', e.g. '35.6997,51.3380'.")],
-    destination: Annotated[str, Field(description="End point as 'lat,lng', e.g. '35.7448,51.3753'.")],
+    origin: Annotated[str, Field(description="Start 'lat,lng'.")],
+    destination: Annotated[str, Field(description="End 'lat,lng'.")],
 ) -> dict[str, Any]:
     """Get bus, BRT and metro options between two points on Neshan, with lines, stops, walking and fares.
 
-    Use when the user wants to go by public transport (اتوبوس، مترو، بی\u200cآر\u200cتی), mainly within Tehran
-    and other big cities Neshan covers. Each option lists legs in order: walk (metres) or a ride with `line`,
-    from/to stop, number of stops and fare in Toman; `fare_toman` is the option's total. Neshan gives no travel
-    time here. No option: the city may have no transit data; use ns_route with mode walk or car.
+    Mainly Tehran and other big cities. Each option lists legs: walk (metres) or a ride with `line`, from/to stop,
+    stops count and fare in Toman; `fare_toman` is the total. No travel time. No option: use ns_route.
     """
     o, d = _point(origin, "origin"), _point(destination, "destination")
     body = await fetch(
