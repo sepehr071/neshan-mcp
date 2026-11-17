@@ -1,9 +1,9 @@
 [project]
 name = "neshan-mcp"
-version = "0.2.0"
+version = "0.2.1"
 description = "Unofficial read-only MCP server for Neshan (نشان), the Iranian map: place search, details, reviews, photos and nearby places, reverse geocoding, air quality, car, motorcycle, bicycle, walking and transit directions, travel times and Tehran traffic-zone checks."
 readme = "README.md"
-license = "MIT"
+license = "PolyForm-Noncommercial-1.0.0"
 license-files = ["LICENSE"]
 authors = [{ name = "Sepehr Radmard", email = "sepehrr80@gmail.com" }]
 requires-python = ">=3.10"
