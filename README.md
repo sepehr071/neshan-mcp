@@ -196,30 +196,6 @@ Points are `lat,lng`, e.g. `35.6997,51.3380`. Place ids come from `ns_search`.
 
 All 11 tools are annotated `readOnlyHint: true`.
 
-## How it works
-
-```text
-  AI agent  (Claude, Cursor, Copilot, ...)
-      │
-      │  MCP over stdio
-      ▼
-  neshan-mcp  (runs on your machine)
-      │
-      │  HTTPS
-      └──────▶  neshan.org/maps/pwa-api   search, places, reviews, photos, routes, transit, air quality
-```
-
-`neshan-mcp` runs locally and calls the same endpoints the neshan.org/maps web app uses, with no hosted server in
-between and no API key. Requests go out through a Chrome-impersonating client and look like the web app's own.
-It sends at most 3 requests at a time with a little jitter, caches answers (places and addresses for 5 minutes,
-live routes for 1 minute, transit, zones and air quality for 10 minutes), retries a failed call up to twice, and
-only talks to `neshan.org`.
-
-Neshan's web app encodes most of its answers: they arrive as shuffled base64 text, and transit answers are also
-XOR-encoded. The server decodes them the same way the web app's own script does. If Neshan changes the scheme, the
-server reads the new values from the site's current JavaScript once, the way a browser loads it, and retries. An
-answer it still cannot read is reported as an error, never as made-up data.
-
 ## Good to know
 
 - **Coordinates are `lat,lng`.** Latitude first. A swapped pair is rejected with a hint.
